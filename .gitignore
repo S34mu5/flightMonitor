@@ -1,0 +1,6 @@
+# Carpetas de compilación de Maven
+/javaBackend/com.jaime_AvinorXmlIngestor_jar_1.0/target/
+
+# Credenciales
+/javaBackend/com.jaime_AvinorXmlIngestor_jar_1.0/.env
+/jsScraping/tidyScraper/.env
