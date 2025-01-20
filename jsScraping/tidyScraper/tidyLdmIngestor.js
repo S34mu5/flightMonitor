@@ -341,7 +341,7 @@ async function getLDMs() {
     console.log("");
     //Volver al inicio para inroducir el siguiente vuelo.
 
-    await page.goto(process.env.TIDY_LOGIN_URL);
+    await page.goto(process.env.TIDY_SEARCHLOAD);
   }
 
   await browser.close();
