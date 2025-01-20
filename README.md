@@ -120,11 +120,11 @@ TIDY_PASSWORD=your_tidy_password
 #### Scripts
 
 - **tidyArrivalsIngestor.js**
-  - Scrapes Tidy platform arrival data
+  - Scrapes a web platform arrival data
   - Updates tidy_flight_arrivals table
 
 - **tidyLdmIngestor.js**
-  - Extracts Load Message (LDM) data
+  - Extracts Load Message (LDM) data from a web platform
   - Updates ldm_data table
   - Flags processed flights in fullyscraped_combined_flights
 
