@@ -96,8 +96,8 @@ Node.js-based scraping module using Puppeteer for web interaction. This module r
 Add the following credentials to your `.env` file:
 
 ```env
-TIDY_USERNAME=your_tidy_username
-TIDY_PASSWORD=your_tidy_password
+TIDY_USERNAME=your_username
+TIDY_PASSWORD=your_password
 ```
 
 **Note**: Contact the appropriate department to obtain the necessary credentials. Access is restricted to authorized personnel only.
