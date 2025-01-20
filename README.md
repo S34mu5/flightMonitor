@@ -100,7 +100,7 @@ TIDY_USERNAME=your_tidy_username
 TIDY_PASSWORD=your_tidy_password
 ```
 
-**Note**: Contact your system administrator or the appropriate department to obtain the necessary credentials. Access is restricted to authorized personnel only.
+**Note**: Contact the appropriate department to obtain the necessary credentials. Access is restricted to authorized personnel only.
 
 #### Scripts
 
