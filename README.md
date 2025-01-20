@@ -105,7 +105,7 @@ TIDY_PASSWORD=your_tidy_password
 #### Scripts
 
 - **tidyArrivalsIngestor.js**
-  - Requires Tidy platform authentication
+  - Requires valid system credentials
   - Scrapes arrival data using authorized access
   - Updates tidy_flight_arrivals table
 
