@@ -98,7 +98,6 @@ Add the following credentials to your `.env` file:
 ```env
 TIDY_USERNAME=your_tidy_username
 TIDY_PASSWORD=your_tidy_password
-ACCESS_TOKEN=your_access_token
 ```
 
 **Note**: Contact your system administrator or the appropriate department to obtain the necessary credentials. Access is restricted to authorized personnel only.
