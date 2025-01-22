@@ -150,6 +150,7 @@ async function getTidyArrivals() {
       return results;
     });
 
+    //Fin de const flights = await page.evaluate(...)
     console.log("Vuelos extraídos:", flights);
 
     //Inserción / Actualización en la base de datos

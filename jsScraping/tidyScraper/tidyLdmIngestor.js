@@ -13,7 +13,7 @@ const pool = mysql.createPool({
 async function getLDMs() {
   // Lanzamos el navegador con opciones
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: true,
     args: [
       "--disable-blink-features=AutomationControlled",
       "--start-maximized",
@@ -50,6 +50,7 @@ async function getLDMs() {
     console.log("");
     console.log(`Ciclo terminado a las ${now}`);
     console.log("");
+    await browser.close();
     return; //Salimos de la función hasta el siguiente intervalo.
   } else {
     console.log(`Array creado a las ${now}`);
@@ -225,10 +226,10 @@ async function getLDMs() {
         error.message
       );
       console.log("");
-      // Lógica alternativa si el botón no está presente
-      now = new Date();
+      // Lógica alternativa si el botón no está presentenowButton
+      nowButton = new Date();
 
-      const ldmMessage = `LDM not available at the time of capture (${now}) in https://tidy.norwegian.no/View/Load/SearchLoads.aspx`;
+      const ldmMessage = `LDM not available at the time of capture (${nowButton}) in https://tidy.norwegian.no/View/Load/SearchLoads.aspx`;
       await pool.query(
         `INSERT INTO ldm_data (
             unique_id, 
@@ -337,12 +338,13 @@ async function getLDMs() {
     );
     console.log("");
 
-    console.log(`Ciclo terminado a las ${now}`);
+    console.log(`Iteración terminada a las ${now}`);
     console.log("");
     //Volver al inicio para inroducir el siguiente vuelo.
 
     await page.goto(process.env.TIDY_SEARCHLOAD);
   }
+  console.log(`Ciclo terminado a las ${now}`);
 
   await browser.close();
 }
