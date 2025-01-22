@@ -15,7 +15,7 @@ const pool = mysql.createPool({
 ///Funcion principal. Entra a tidy
 async function getTidyArrivals() {
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: true,
     args: [
       "--disable-blink-features=AutomationControlled",
       "--start-maximized",
@@ -66,7 +66,7 @@ async function getTidyArrivals() {
       });
     } catch (error) {
       const now = new Date().toISOString();
-      //TODO: Este es el mensaje predeterminado de la web qe accedemos, sería deseable evitar hardcodearlo.
+      //TODO: Este es el mensaje predeterminado de la web que accedemos, sería deseable evitar hardcodearlo.
       console.log("No data was found for the specified search criteria");
       console.log(`at ${now}`);
       console.log();
@@ -91,11 +91,11 @@ async function getTidyArrivals() {
       //Selecciona todas las filas (<tr>) del DOM que tienen las clases parentrow y toggleFlightDetails
       //Ese selector nos identifica los vuelos que en tidy se representa como una fila de una tabla.
       const rows = document.querySelectorAll(".parentrow.toggleFlightDetails");
-      //Array vacío donde irán nuestros vuelos.
+      //Array vacío donde irán nuestros vuelos, que a su vez será devuelto a flights.
       const results = [];
 
       rows.forEach((row) => {
-        // Para cada fila seleccionada en "rows", obtenemos todas las celdas (<td>) contenidas dentro de esa fila.
+        // Para cada fila seleccionada en "rows" (es decir row), obtenemos todas las celdas (<td>) contenidas dentro de esa fila.
         // Esto devuelve un NodeList que representa las celdas asociadas a una fila específica.
         // En este contexto:
         // - Una fila ("row") representa un vuelo.
@@ -133,6 +133,47 @@ async function getTidyArrivals() {
         const etaSQL = parseTime(etaStr);
         const ataSQL = parseTime(ataStr);
 
+        const transferInfo = []; //Array para la transfer info
+        //La transfer info está, según la estructura del html, en la siguiente fila.
+        const transferRow = row.nextElementSibling; //Si no existe, será null.
+        if (
+          transferRow.classList.contains("childrow") &&
+          transferRow.classList.contains("hidden")
+        ) {
+          const transferTable = transferRow.querySelector("table");
+          if (transferTable) {
+            const outboundFlightRows =
+              transferTable.querySelectorAll("tr.detailsrow"); //Agrupamos todas las filas con outbund flight
+            for (const outboundFlightRow of outboundFlightRows) {
+              const cells = outboundFlightRow.querySelectorAll("td");
+
+              // Asignamos valores a variables con base en los encabezados
+              const outboundFlight = cells[0].innerText.trim(); // Outbound flight
+              const to = cells[1].innerText.trim(); // To
+              const acReg = cells[2].innerText.trim(); // AC reg
+              const status = cells[3].innerText.trim(); // Status
+              const totalBags = cells[4].innerText.trim(); // Total bags
+              const stdEtd = cells[5].innerText.trim(); // STD / ETD
+              const estimatedConnectionTime = cells[6].innerText.trim(); // Estimated connection time
+              const gate = cells[7].innerText.trim(); // Gate
+              const stand = cells[8].innerText.trim(); // Stand
+
+              //Metemos estos datos al array transferInfo[]
+              transferInfo.push({
+                outboundFlight,
+                to,
+                acReg,
+                status,
+                totalBags,
+                stdEtd,
+                estimatedConnectionTime,
+                gate,
+                stand,
+              });
+            }
+          }
+        }
+
         results.push({
           flight,
           date: dateSQL, // El nombre de la propiedad es "date", pero el valor viene de "dateSQL".
@@ -144,6 +185,7 @@ async function getTidyArrivals() {
           ata: ataSQL,
           stand,
           bag_transfer_status,
+          transferInfo,
         });
       });
       //Asignamos los resutados a flights[]
@@ -151,7 +193,11 @@ async function getTidyArrivals() {
     });
 
     //Fin de const flights = await page.evaluate(...)
-    console.log("Vuelos extraídos:", flights);
+    //Nota:  Node.js, los objetos anidados solo se muestran como [Object] cuando están dentro de un array.
+    // A diferencia de hacer console.log("Vuelos extraídos:", flights);
+    //tenemos que usar stringyfy(flights, null, 2). Null indica que no sobreescribimos el método de impresión,
+    // y 2 es el número de espacios.
+    console.log("Vuelos extraídos:", JSON.stringify(flights, null, 2));
 
     //Inserción / Actualización en la base de datos
 
