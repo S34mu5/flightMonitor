@@ -229,7 +229,7 @@ async function getLDMs() {
       // Lógica alternativa si el botón no está presentenowButton
       nowButton = new Date();
 
-      const ldmMessage = `LDM not available at the time of capture (${nowButton}) in https://tidy.norwegian.no/View/Load/SearchLoads.aspx`;
+      const ldmMessage = `LDM not available at the last time of capture attempt (${nowButton}) in https://tidy.norwegian.no/View/Load/SearchLoads.aspx`;
       await pool.query(
         `INSERT INTO ldm_data (
             unique_id, 
