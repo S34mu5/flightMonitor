@@ -197,7 +197,10 @@ async function getTidyArrivals() {
     // A diferencia de hacer console.log("Vuelos extraídos:", flights);
     //tenemos que usar stringyfy(flights, null, 2). Null indica que no sobreescribimos el método de impresión,
     // y 2 es el número de espacios.
-    console.log("Vuelos extraídos:", JSON.stringify(flights, null, 2));
+    console.log(
+      "Vuelos extraídos:",
+      JSON.stringify(flights, null, 2).replace(/"/g, "")
+    );
 
     //Inserción / Actualización en la base de datos
 
