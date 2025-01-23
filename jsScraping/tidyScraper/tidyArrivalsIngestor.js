@@ -247,6 +247,75 @@ async function getTidyArrivals() {
           stand,
           bag_transfer_status,
         ]);
+        //TODO: Esta espera debería impedir que salten las reestricciones de FK en la BDD. Comprobar si se sigue produciendo errno: 1452,.
+
+        // await delay(2000);
+
+        // Consulta para INSERT/UPDATE en tidy_transfer_info_arrivals
+        const insertTransferSQL = `
+INSERT INTO tidy_transfer_info_arrivals
+(
+  outbound_flight,
+  \`to\`,
+  ac_reg,
+  status,
+  total_bags,
+  std_etd,
+  estimated_connection_time,
+  gate,
+  stand,
+  inbound_flight,
+  inbound_ac_reg,
+  inbound_sta
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE
+  ac_reg = VALUES(ac_reg),
+  status = VALUES(status),
+  total_bags = VALUES(total_bags),
+  std_etd = VALUES(std_etd),
+  estimated_connection_time = VALUES(estimated_connection_time),
+  gate = VALUES(gate),
+  stand = VALUES(stand)
+`;
+
+        // Función para convertir "HHMM" -> "HH:MM:00" para poder insertarla en la BDD.
+        function parseStdEtd(stdEtd) {
+          // Si stdEtd es "1000", por ejemplo → "10:00:00"
+          if (!stdEtd || stdEtd.length < 3) {
+            return "00:00:00";
+          }
+          const hh = stdEtd.substring(0, 2);
+          const mm = stdEtd.substring(2, 4);
+          return `${hh}:${mm}:00`;
+        }
+
+        for (const flight of flights) {
+          // 2. Insertar/Actualizar cada fila de "transferInfo"
+          for (const t of flight.transferInfo) {
+            // Prepara valores adecuados
+            const stdEtdSql = parseStdEtd(t.stdEtd);
+            const totalBags = parseInt(t.totalBags, 10) || 0; // Asegúrate de tener un entero
+
+            await pool.execute(insertTransferSQL, [
+              t.outboundFlight, // outbound_flight
+              t.to, // `to`
+              t.acReg, // ac_reg
+              t.status, // status
+              totalBags, // total_bags
+              stdEtdSql, // std_etd (TIME)
+              t.estimatedConnectionTime, // estimated_connection_time
+              t.gate, // gate
+              t.stand, // stand
+
+              // Campos de la Foreign Key hacia tidy_flight_arrivals
+              flight.flight, // inbound_flight (FK a flight)
+              flight.ac_reg, // inbound_ac_reg (FK a ac_reg)
+              flight.sta, // inbound_sta (FK a sta, datetime)
+            ]);
+          }
+        }
+
         /*
   Este fragmento de código realiza un manejo detallado del resultado de una consulta
   SQL con la instrucción INSERT ... ON DUPLICATE KEY UPDATE utilizando MySQL2 en Node.js.
