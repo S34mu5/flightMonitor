@@ -228,8 +228,57 @@ async function getLDMs() {
       console.log("");
       // Lógica alternativa si el botón no está presentenowButton
       nowButton = new Date();
+      //TODO: Mejorar a lógica para manejos de búsquedas tardías de LDMs.
+      //Caso de buscar un LDM anterior a 48 horas
+      const userMessage = await page.waitForSelector(".usermessage");
+      if (userMessage) {
+        const userMessageText = await userMessage.evaluate((element) => {
+          return element.textContent;
+        });
+        console.error(`${userMessageText}\n`);
+        const tooLateLDMMessage = userMessageText;
+        //Introducimos el userMessageText a modo de LDM.
+        await pool.query(
+          `INSERT INTO ldm_data (
+              unique_id, 
+              flight_id, 
+              ac_reg, 
+              schedule_time, 
+              status, 
+              status_code, 
+              status_time, 
+              ldm_text, 
+              ldm_obtained_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            ON DUPLICATE KEY UPDATE 
+              flight_id = VALUES(flight_id), 
+              ac_reg = VALUES(ac_reg), 
+              schedule_time = VALUES(schedule_time), 
+              status = VALUES(status), 
+              status_code = VALUES(status_code), 
+              status_time = VALUES(status_time), 
+              ldm_text = VALUES(ldm_text), 
+              ldm_obtained_at = NOW()`,
+          [
+            flight.unique_id, // unique_id
+            flight.flight_id || "N/A", // flight_id
+            flight.ac_reg || "N/A", // ac_reg
+            flight.schedule_time || "1970-01-01 00:00:00", // schedule_time
+            flight.status || null, // status
+            flight.status_code || "N/A", // status_code
+            flight.status_time || "1970-01-01 00:00:00", // status_time
+            userMessageText, // Mensaje que indicando que no es posible recuperar LDMs anteriores a 48 horas.
+          ]
+        );
+        //Lo marcamos como capturado para evitar acceder infinitamente cuando excedemos las 48h.
+        await pool.query(
+          `UPDATE fullyscraped_combined_flights SET ldm_obtained = true WHERE unique_id = ?`,
+          [flight.unique_id]
+        );
+      }
 
-      const ldmMessage = `LDM not available at the last time of capture attempt (${nowButton}) in https://tidy.norwegian.no/View/Load/SearchLoads.aspx`;
+      ////////////////////////////////////////////
+      const ldmMessage = `LDM for flight ${flight_id} ${schedule_time} not available at the last time of capture attempt (${nowButton}) in https://tidy.norwegian.no/View/Load/SearchLoads.aspx`;
       await pool.query(
         `INSERT INTO ldm_data (
             unique_id, 
