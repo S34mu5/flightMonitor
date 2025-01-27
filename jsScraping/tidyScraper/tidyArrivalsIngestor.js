@@ -80,10 +80,14 @@ async function getTidyArrivals() {
     // Obtenemos la info de la tabla con page.evaluate()
 
     /*
+
     page.evaluate() es una función proporcionada por Puppeteer 
     que permite ejecutar código JavaScript dentro del contexto
     de la página cargada (el navegador controlado por Puppeteer), 
     y flights almacenará el resultado que devuelve esta función.
+    De no usar page.evaluate(), no podemos "traer" al contexto de Node
+    la información recolectada y guardarla en const flights.
+
 
 
     */
@@ -91,8 +95,8 @@ async function getTidyArrivals() {
       //Selecciona todas las filas (<tr>) del DOM que tienen las clases parentrow y toggleFlightDetails
       //Ese selector nos identifica los vuelos que en tidy se representa como una fila de una tabla.
       const rows = document.querySelectorAll(".parentrow.toggleFlightDetails");
-      //Array vacío donde irán nuestros vuelos, que a su vez será devuelto a flights.
-      const results = [];
+      //Array vacío donde irán nuestros vuelos, que a su vez será devuelto a flights dentro del contexto de Node.js. (Es la gracia de Node)
+      const arrivalFlightsArray = [];
 
       rows.forEach((row) => {
         // Para cada fila seleccionada en "rows" (es decir row), obtenemos todas las celdas (<td>) contenidas dentro de esa fila.
@@ -174,7 +178,7 @@ async function getTidyArrivals() {
           }
         }
 
-        results.push({
+        arrivalFlightsArray.push({
           flight,
           date: dateSQL, // El nombre de la propiedad es "date", pero el valor viene de "dateSQL".
           from_origin,
@@ -189,7 +193,7 @@ async function getTidyArrivals() {
         });
       });
       //Asignamos los resutados a flights[]
-      return results;
+      return arrivalFlightsArray;
     });
 
     //Fin de const flights = await page.evaluate(...)
@@ -204,38 +208,97 @@ async function getTidyArrivals() {
 
     //Inserción / Actualización en la base de datos
 
-    const sql = `
-      INSERT INTO tidy_flight_arrivals
-      (flight, date, from_origin, ac_reg, status, sta, eta, ata, stand, bag_transfer_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-      ON DUPLICATE KEY UPDATE
-        date = VALUES(date),
-        from_origin = VALUES(from_origin),
-        status = VALUES(status),
-        eta = VALUES(eta),
-        ata = VALUES(ata),
-        stand = VALUES(stand),
-        bag_transfer_status = VALUES(bag_transfer_status),
-        updated_at = CURRENT_TIMESTAMP
-    `;
+    //TRANSACCIÓN
 
-    // Vamos insertando/actualizando cada vuelo en un bucle
-    for (const flightData of flights) {
-      const {
-        flight,
-        date,
-        from_origin,
-        ac_reg,
-        status,
-        sta,
-        eta,
-        ata,
-        stand,
-        bag_transfer_status,
-      } = flightData;
+    // Obtener conexión e iniciar transacción
+    const connection = await pool.getConnection();
+    await connection.beginTransaction();
 
-      try {
-        const [result] = await pool.execute(sql, [
+    try {
+      // INSERT para arrivals
+      const sqlArrivals = `
+        INSERT INTO tidy_flight_arrivals
+        (
+          flight,
+          date,
+          from_origin,
+          ac_reg,
+          status,
+          sta,
+          eta,
+          ata,
+          stand,
+          bag_transfer_status,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON DUPLICATE KEY UPDATE
+          date = VALUES(date),
+          from_origin = VALUES(from_origin),
+          status = VALUES(status),
+          eta = VALUES(eta),
+          ata = VALUES(ata),
+          stand = VALUES(stand),
+          bag_transfer_status = VALUES(bag_transfer_status),
+          updated_at = CURRENT_TIMESTAMP
+      `;
+
+      // INSERT para transfer info
+      const insertTransferSQL = `
+        INSERT INTO tidy_transfer_info_arrivals
+        (
+          outbound_flight,
+          \`to\`,
+          ac_reg,
+          status,
+          total_bags,
+          std_etd,
+          estimated_connection_time,
+          gate,
+          stand,
+          inbound_flight,
+          inbound_ac_reg,
+          inbound_sta
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          ac_reg = VALUES(ac_reg),
+          status = VALUES(status),
+          total_bags = VALUES(total_bags),
+          std_etd = VALUES(std_etd),
+          estimated_connection_time = VALUES(estimated_connection_time),
+          gate = VALUES(gate),
+          stand = VALUES(stand)
+      `;
+
+      // Función auxiliar para stdEtd "HHMM" -> "HH:MM:00", manteniendo el formato de la web. Hay motivos para no reutilizar parseTime().
+      //TODO: Investigar cómo implementar fecha, ya que la web nos fuerza a asumir misma la misma fecha que el inbound flight.
+      //TODO: Una mala gestión de la fecha tendría implicaciones para vuelos con transfers para el día siguiente (llegadas tardías).
+      function parseStdEtd(stdEtd) {
+        if (!stdEtd || stdEtd.length < 3) {
+          return "00:00:00";
+        }
+        const hh = stdEtd.substring(0, 2);
+        const mm = stdEtd.substring(2, 4);
+        return `${hh}:${mm}:00`;
+      }
+
+      // Insertar/actualizar en tidy_flight_arrivals
+      for (const f of flights) {
+        const {
+          flight,
+          date,
+          from_origin,
+          ac_reg,
+          status,
+          sta,
+          eta,
+          ata,
+          stand,
+          bag_transfer_status,
+        } = f;
+        // Guardamos el resultado en una variable para evaluar cambios y loguearlos.
+        const [resultArrivals] = await connection.execute(sqlArrivals, [
           flight,
           date,
           from_origin,
@@ -247,118 +310,134 @@ async function getTidyArrivals() {
           stand,
           bag_transfer_status,
         ]);
-        //TODO: Esta espera debería impedir que salten las reestricciones de FK en la BDD. Comprobar si se sigue produciendo errno: 1452,.
-
-        // await delay(2000);
-
-        // Consulta para INSERT/UPDATE en tidy_transfer_info_arrivals
-        const insertTransferSQL = `
-INSERT INTO tidy_transfer_info_arrivals
-(
-  outbound_flight,
-  \`to\`,
-  ac_reg,
-  status,
-  total_bags,
-  std_etd,
-  estimated_connection_time,
-  gate,
-  stand,
-  inbound_flight,
-  inbound_ac_reg,
-  inbound_sta
-)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON DUPLICATE KEY UPDATE
-  ac_reg = VALUES(ac_reg),
-  status = VALUES(status),
-  total_bags = VALUES(total_bags),
-  std_etd = VALUES(std_etd),
-  estimated_connection_time = VALUES(estimated_connection_time),
-  gate = VALUES(gate),
-  stand = VALUES(stand)
-`;
-
-        // Función para convertir "HHMM" -> "HH:MM:00" para poder insertarla en la BDD.
-        function parseStdEtd(stdEtd) {
-          // Si stdEtd es "1000", por ejemplo → "10:00:00"
-          if (!stdEtd || stdEtd.length < 3) {
-            return "00:00:00";
-          }
-          const hh = stdEtd.substring(0, 2);
-          const mm = stdEtd.substring(2, 4);
-          return `${hh}:${mm}:00`;
-        }
-
-        for (const flight of flights) {
-          // 2. Insertar/Actualizar cada fila de "transferInfo"
-          for (const t of flight.transferInfo) {
-            // Prepara valores adecuados
-            const stdEtdSql = parseStdEtd(t.stdEtd);
-            const totalBags = parseInt(t.totalBags, 10) || 0; // Asegúrate de tener un entero
-
-            await pool.execute(insertTransferSQL, [
-              t.outboundFlight, // outbound_flight
-              t.to, // `to`
-              t.acReg, // ac_reg
-              t.status, // status
-              totalBags, // total_bags
-              stdEtdSql, // std_etd (TIME)
-              t.estimatedConnectionTime, // estimated_connection_time
-              t.gate, // gate
-              t.stand, // stand
-
-              // Campos de la Foreign Key hacia tidy_flight_arrivals
-              flight.flight, // inbound_flight (FK a flight)
-              flight.ac_reg, // inbound_ac_reg (FK a ac_reg)
-              flight.sta, // inbound_sta (FK a sta, datetime)
-            ]);
-          }
-        }
-
         /*
-  Este fragmento de código realiza un manejo detallado del resultado de una consulta
-  SQL con la instrucción INSERT ... ON DUPLICATE KEY UPDATE utilizando MySQL2 en Node.js.
+    Este fragmento de código realiza un manejo detallado del resultado de una consulta
+    SQL con la instrucción INSERT ... ON DUPLICATE KEY UPDATE utilizando MySQL2 en Node.js.
 
-  A diferencia de JDBC en Java, MySQL2 en Node.js proporciona varios indicadores clave
-  para analizar el resultado de la consulta:
+    A diferencia de JDBC en Java, MySQL2 en Node.js proporciona varios indicadores clave
+    para analizar el resultado de la consulta:
 
-  - `affectedRows`: Representa la cantidad de filas que se vieron afectadas por la consulta.
-    Posibles valores:
-      * `1`: Se insertó una nueva fila.
-      * `2`: Una fila existente fue procesada (actualizada o no cambió, pero se evaluó).
+    - `affectedRows`: Representa la cantidad de filas que se vieron afectadas por la consulta.
+      Posibles valores:
+        * `1`: Se insertó una nueva fila.
+        * `2`: Una fila existente fue procesada (actualizada o no cambió, pero se evaluó).
 
-  - `changedRows`: Indica cuántas filas sufrieron cambios efectivos tras la consulta.
-    Posibles valores:
-      * `0`: No se realizaron cambios efectivos; los valores ya eran idénticos.
-      * `>0`: Hubo cambios efectivos en los datos.
+    - `changedRows`: Indica cuántas filas sufrieron cambios efectivos tras la consulta.
+      Posibles valores:
+        * `0`: No se realizaron cambios efectivos; los valores ya eran idénticos.
+        * `>0`: Hubo cambios efectivos en los datos.
 
-  Estos valores combinados permiten determinar con precisión si una fila fue insertada,
-  actualizada o si no sufrió cambios.
-*/
+    Estos valores combinados permiten determinar con precisión si una fila fue insertada,
+    actualizada o si no sufrió cambios. Se usará la misma lógica para evaluar cambios en la información de transfer.
+  */
 
-        // Evaluamos los resultados de la consulta con la lógica anterior:
-        if (result.affectedRows === 1) {
-          console.log(
-            `Vuelo ${flight} ${sta} insertado a las ${new Date().toISOString()}`
-          );
-        } else if (result.affectedRows === 2 && result.changedRows > 0) {
-          console.log(
-            `Vuelo ${flight} ${sta} actualizado a las ${new Date().toISOString()}`
-          );
-        } else if (result.affectedRows === 2 && result.changedRows === 0) {
-          console.log(
-            `Vuelo ${flight} ${sta} no sufrió cambios a las ${new Date().toISOString()}`
-          );
+        // Logs:
+        if (resultArrivals.affectedRows === 1) {
+          console.log(`Vuelo ${flight} STA ${sta} insertado.`);
+        } else if (
+          resultArrivals.affectedRows === 2 &&
+          resultArrivals.changedRows > 0
+        ) {
+          console.log(`Vuelo ${flight} STA ${sta} actualizado.`);
+        } else if (
+          resultArrivals.affectedRows === 2 &&
+          resultArrivals.changedRows === 0
+        ) {
+          console.log(`Vuelo ${flight} STA ${sta} sin cambios.`);
         }
-      } catch (err) {
-        console.error(`Error al insertar/actualizar ${flight}:`, err);
       }
+
+      // Insertar/actualizar en tidy_transfer_info_arrivals
+      for (const f of flights) {
+        //Comprobar el array de transferInfo de cada vuelo antes, por si de da el caso de:
+        /* const flights = [
+          { flight: "DY123", transferInfo: [{ outboundFlight: "DY456" }] }, // Válido
+          { flight: "DY124", transferInfo: null },                        // No válido
+          { flight: "DY125", transferInfo: "not an array" },              // No válido
+          { flight: "DY126" },                                            // No válido
+        ];*/
+        //Si f.transferInfo no existe o no es un array, salta esta iteración del bucle y pasa al siguiente vuelo f.
+        //Se comenta el check de momento para detectar errores.
+        //  if (!f.transferInfo || !Array.isArray(f.transferInfo)) continue;
+
+        for (const t of f.transferInfo) {
+          const stdEtdSql = parseStdEtd(t.stdEtd);
+          //t.totalBags, 10 indica que que debe interpretar el string como un número en base 10. En caso de errores, devolvemos cero.
+          //TODO: Investigar implicaciones en caso de que que se aplique el cero por defecto. Valorar devolver null.
+          const totalBags = parseInt(t.totalBags, 10) || 0;
+
+          await connection.execute(insertTransferSQL, [
+            t.outboundFlight,
+            t.to,
+            t.acReg,
+            t.status,
+            totalBags,
+            stdEtdSql,
+            t.estimatedConnectionTime,
+            t.gate,
+            t.stand,
+
+            // Foreign Keys
+            f.flight,
+            f.ac_reg,
+            f.sta,
+          ]);
+          // Guardamos el resultado en una variable para evaluar cambios y loguearlos.
+          const [resultTransfer] = await connection.execute(insertTransferSQL, [
+            t.outboundFlight, // outbound_flight
+            t.to, // `to`
+            t.acReg, // ac_reg
+            t.status, // status
+            totalBags, // total_bags
+            stdEtdSql, // std_etd
+            t.estimatedConnectionTime, // estimated_connection_time
+            t.gate, // gate
+            t.stand, // stand
+
+            // FKs
+            f.flight, // inbound_flight
+            f.ac_reg, // inbound_ac_reg
+            f.sta, // inbound_sta
+          ]);
+          if (resultTransfer.affectedRows === 1) {
+            console.log(
+              `Transfer insertado: Inbound ${f.flight} con ${t.totalBags} maletas >>> Outbound: ${t.outboundFlight}.`
+            );
+          } else if (
+            resultTransfer.affectedRows === 2 &&
+            resultTransfer.changedRows > 0
+          ) {
+            console.log(
+              `Transfer actualizada: Inbound ${f.flight}, con ${t.totalBags} maletas >>> Outbound: ${t.outboundFlight}.`
+            );
+          } else if (
+            resultTransfer.affectedRows === 2 &&
+            resultTransfer.changedRows === 0
+          ) {
+            console.log(
+              `Transfer sin cambios: Inbound ${f.flight}, con ${t.totalBags} maletas >>> Outbound: ${t.outboundFlight}.`
+            );
+          }
+        }
+      }
+
+      // Si todo salió bien, comiteamos la transacción. Debería eliminar el err.1452.
+      await connection.commit();
+      console.log("Transacción completada con éxito");
+    } catch (transError) {
+      // Si algo sale mal dentro de la transacción, rollback
+      await connection.rollback();
+      console.error("Error en la transacción, rollback:", transError.message);
+    } finally {
+      // Liberamos la conexión
+      connection.release();
     }
+
+    // FIN DE LA TRANSACCIÓN.
   } catch (error) {
     console.error("Error durante el proceso de scraping:", error);
   } finally {
-    // Cerramos el navegador tras cada iteración
+    // Cerramos el navegador
     await browser.close();
   }
 }
