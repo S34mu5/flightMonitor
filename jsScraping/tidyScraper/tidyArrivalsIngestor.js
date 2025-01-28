@@ -197,10 +197,10 @@ async function getTidyArrivals() {
     });
 
     //Fin de const flights = await page.evaluate(...)
-    //Nota:  Node.js, los objetos anidados solo se muestran como [Object] cuando están dentro de un array.
-    // A diferencia de hacer console.log("Vuelos extraídos:", flights);
+    //Nota:  En Node.js, los objetos anidados se muestran como [Object] cuando están dentro de un array.
+    // A diferencia de hacer console.log("Vuelos extraídos:", flights),
     //tenemos que usar stringyfy(flights, null, 2). Null indica que no sobreescribimos el método de impresión,
-    // y 2 es el número de espacios.
+    // y 2 es el número de espacios. También elimino las comillas que mete stringyfy.
     console.log(
       "Vuelos extraídos:",
       JSON.stringify(flights, null, 2).replace(/"/g, "")
@@ -362,27 +362,11 @@ async function getTidyArrivals() {
 
         for (const t of f.transferInfo) {
           const stdEtdSql = parseStdEtd(t.stdEtd);
-          //t.totalBags, 10 indica que que debe interpretar el string como un número en base 10. En caso de errores, devolvemos cero.
-          //TODO: Investigar implicaciones en caso de que que se aplique el cero por defecto. Valorar devolver null.
+          // t.totalBags, 10 indica que debe interpretar el string como un número en base 10. En caso de errores, devolvemos cero.
+          // TODO: Investigar implicaciones en caso de que se aplique el cero por defecto. Valorar devolver null.
           const totalBags = parseInt(t.totalBags, 10) || 0;
 
-          await connection.execute(insertTransferSQL, [
-            t.outboundFlight,
-            t.to,
-            t.acReg,
-            t.status,
-            totalBags,
-            stdEtdSql,
-            t.estimatedConnectionTime,
-            t.gate,
-            t.stand,
-
-            // Foreign Keys
-            f.flight,
-            f.ac_reg,
-            f.sta,
-          ]);
-          // Guardamos el resultado en una variable para evaluar cambios y loguearlos.
+          // Guardamos el resultado en una variable para evaluar cambios y loguearlos
           const [resultTransfer] = await connection.execute(insertTransferSQL, [
             t.outboundFlight, // outbound_flight
             t.to, // `to`
@@ -399,31 +383,50 @@ async function getTidyArrivals() {
             f.ac_reg, // inbound_ac_reg
             f.sta, // inbound_sta
           ]);
-          if (resultTransfer.affectedRows === 1) {
+
+          // TODO: Siempre imprime insertado, no distingue actualizaciones ni sin cambios (CORREGIDO, AJUSTAR COMENTARIOS.)
+          console.log("Valores a insertar:", {
+            outbound_flight: t.outboundFlight,
+            inbound_flight: f.flight,
+            inbound_ac_reg: f.ac_reg,
+            inbound_sta: f.sta,
+          });
+          console.log("Resultados de la consulta transfers:", {
+            affectedRows: resultTransfer.affectedRows,
+            changedRows: resultTransfer.changedRows,
+            insertId: resultTransfer.insertId, // Nuevo campo útil para debug
+          });
+
+          // Lógica de manejo corregida (NUEVOS COMENTARIOS)
+          // 1. Si hay insertId > 0: Es una inserción nueva
+          // 2. Si no hay insertId pero changedRows > 0: Actualización con cambios
+          // 3. Si no hay insertId y changedRows = 0: Actualización sin cambios
+          if (resultTransfer.insertId) {
+            // Registro nuevo insertado (auto-increment)
             console.log(
               `Transfer insertado: Inbound ${f.flight} con ${t.totalBags} maletas >>> Outbound: ${t.outboundFlight}.`
             );
-          } else if (
-            resultTransfer.affectedRows === 2 &&
-            resultTransfer.changedRows > 0
-          ) {
-            console.log(
-              `Transfer actualizada: Inbound ${f.flight}, con ${t.totalBags} maletas >>> Outbound: ${t.outboundFlight}.`
-            );
-          } else if (
-            resultTransfer.affectedRows === 2 &&
-            resultTransfer.changedRows === 0
-          ) {
-            console.log(
-              `Transfer sin cambios: Inbound ${f.flight}, con ${t.totalBags} maletas >>> Outbound: ${t.outboundFlight}.`
-            );
+          } else {
+            if (resultTransfer.changedRows > 0) {
+              // Registro existente actualizado con cambios
+              console.log(
+                `Transfer actualizado: Inbound ${f.flight}, con ${t.totalBags} maletas >>> Outbound: ${t.outboundFlight}.`
+              );
+            } else {
+              // Registro existente sin cambios
+              console.log(
+                `Transfer sin cambios: Inbound ${f.flight}, con ${t.totalBags} maletas >>> Outbound: ${t.outboundFlight}.`
+              );
+            }
           }
         }
       }
 
       // Si todo salió bien, comiteamos la transacción. Debería eliminar el err.1452.
       await connection.commit();
-      console.log("Transacción completada con éxito");
+      const now = new Date().toISOString();
+      console.log("");
+      console.log(`Transacción completada a las ${now}`);
     } catch (transError) {
       // Si algo sale mal dentro de la transacción, rollback
       await connection.rollback();

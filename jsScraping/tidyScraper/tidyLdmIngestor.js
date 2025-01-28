@@ -230,7 +230,7 @@ async function getLDMs() {
       nowButton = new Date();
       //TODO: Mejorar a lógica para manejos de búsquedas tardías de LDMs.
       //Caso de buscar un LDM anterior a 48 horas
-      const userMessage = await page.waitForSelector(".usermessage");
+      /*  const userMessage = await page.waitForSelector(".usermessage");
       if (userMessage) {
         const userMessageText = await userMessage.evaluate((element) => {
           return element.textContent;
@@ -275,10 +275,10 @@ async function getLDMs() {
           `UPDATE fullyscraped_combined_flights SET ldm_obtained = true WHERE unique_id = ?`,
           [flight.unique_id]
         );
-      }
+      }*/
 
       ////////////////////////////////////////////
-      const ldmMessage = `LDM for flight ${flight_id} ${schedule_time} not available at the last time of capture attempt (${nowButton}) in https://tidy.norwegian.no/View/Load/SearchLoads.aspx`;
+      const ldmMessage = `LDM not available at the last time of capture attempt (${nowButton}) in https://tidy.norwegian.no/View/Load/SearchLoads.aspx`;
       await pool.query(
         `INSERT INTO ldm_data (
             unique_id, 

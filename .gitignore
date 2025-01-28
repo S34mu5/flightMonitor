@@ -1,6 +1,12 @@
 # Carpetas de compilación de Maven
 /javaBackend/com.jaime_AvinorXmlIngestor_jar_1.0/target/
 
+# Dockerfile
+/javaBackend/com.jaime_AvinorXmlIngestor_jar_1.0/Dockerfile
+
 # Credenciales
 /javaBackend/com.jaime_AvinorXmlIngestor_jar_1.0/.env
 /jsScraping/tidyScraper/.env
+
+# Carpeta para cvs's.
+jsScraping\tidyScraper\csv
