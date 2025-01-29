@@ -15,7 +15,7 @@ const pool = mysql.createPool({
 ///Funcion principal. Entra a tidy
 async function getTidyArrivals() {
   const browser = await puppeteer.launch({
-    headless: true,
+    headless: false,
     args: [
       "--disable-blink-features=AutomationControlled",
       "--start-maximized",
@@ -349,21 +349,11 @@ async function getTidyArrivals() {
 
       // Insertar/actualizar en tidy_transfer_info_arrivals
       for (const f of flights) {
-        //Comprobar el array de transferInfo de cada vuelo antes, por si de da el caso de:
-        /* const flights = [
-          { flight: "DY123", transferInfo: [{ outboundFlight: "DY456" }] }, // Válido
-          { flight: "DY124", transferInfo: null },                        // No válido
-          { flight: "DY125", transferInfo: "not an array" },              // No válido
-          { flight: "DY126" },                                            // No válido
-        ];*/
-        //Si f.transferInfo no existe o no es un array, salta esta iteración del bucle y pasa al siguiente vuelo f.
-        //Se comenta el check de momento para detectar errores.
-        //  if (!f.transferInfo || !Array.isArray(f.transferInfo)) continue;
-
+        // Iteramos sobre cada fila de transfer (t) dentro del array transferInfo del vuelo actual (f)
         for (const t of f.transferInfo) {
           const stdEtdSql = parseStdEtd(t.stdEtd);
           // t.totalBags, 10 indica que debe interpretar el string como un número en base 10. En caso de errores, devolvemos cero.
-          // TODO: Investigar implicaciones en caso de que se aplique el cero por defecto. Valorar devolver null.
+          // TODO: Investigar las implicaciones de devolver 0 por defecto. Valorar si es mejor devolver null.
           const totalBags = parseInt(t.totalBags, 10) || 0;
 
           // Guardamos el resultado en una variable para evaluar cambios y loguearlos
@@ -384,7 +374,6 @@ async function getTidyArrivals() {
             f.sta, // inbound_sta
           ]);
 
-          // TODO: Siempre imprime insertado, no distingue actualizaciones ni sin cambios (CORREGIDO, AJUSTAR COMENTARIOS.)
           console.log("Valores a insertar:", {
             outbound_flight: t.outboundFlight,
             inbound_flight: f.flight,
@@ -394,7 +383,7 @@ async function getTidyArrivals() {
           console.log("Resultados de la consulta transfers:", {
             affectedRows: resultTransfer.affectedRows,
             changedRows: resultTransfer.changedRows,
-            insertId: resultTransfer.insertId, // Nuevo campo útil para debug
+            insertId: resultTransfer.insertId, // Debugging
           });
 
           // Lógica de manejo corregida (NUEVOS COMENTARIOS)

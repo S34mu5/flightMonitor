@@ -8,5 +8,6 @@
 /javaBackend/com.jaime_AvinorXmlIngestor_jar_1.0/.env
 /jsScraping/tidyScraper/.env
 
-# Carpeta para cvs's.
-jsScraping\tidyScraper\csv
+# Carpeta para CSVs.
+jsScraping/tidyScraper/csv/*
+
