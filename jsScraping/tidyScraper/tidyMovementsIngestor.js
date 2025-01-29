@@ -24,7 +24,8 @@ function clearDownloadFolder(downloadPath) {
     for (const file of files) {
       const filePath = path.join(downloadPath, file);
       fs.unlinkSync(filePath); // Eliminar el archivo
-      console.log(`Archivo eliminado: ${filePath}`);
+      const newPath = path.join(downloadPath, "movements.csv");
+      console.log(`Archivo eliminado: ${path.relative(__dirname, newPath)}`);
     }
     console.log("Carpeta de descargas limpiada correctamente.");
   } else {
@@ -53,6 +54,96 @@ async function waitForFileDownload(downloadPath, fileName, timeout = 120000) {
       }
     }, 1000); // Verificar cada segundo
   });
+}
+// Para horas "HHMM" => "yyyy-mm-dd HH:MM:00" necesario para mantener la consistecia en la BDD.
+function parseTime(hhmm) {
+  if (!hhmm) return null;
+  const hh = hhmm.substring(0, 2);
+  const mm = hhmm.substring(2, 4);
+  return `${hh}:${mm}:00`;
+}
+function parseInteger(value) {
+  if (value === undefined || value === null || value.trim() === "") {
+    return null;
+  }
+  const parsedValue = parseInt(value, 10);
+  return isNaN(parsedValue) ? null : parsedValue;
+}
+
+async function processCSVAndInsertIntoDatabase(filePath) {
+  const data = fs.readFileSync(filePath, "utf8");
+  const rows = data.split("\n").filter((row) => row.trim() !== "");
+  // Ignoramos la primera fila (cabecera)
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i].split(";").map((cell) => cell.trim());
+
+    const values = [
+      row[0], // flight
+      row[1], // date (YYYY-MM-DD)
+      row[2], // from
+      row[3], // to
+      row[4], // ac_reg
+      parseTime(row[5]), // std
+      parseTime(row[6]), // atd
+      parseTime(row[7]), // sta
+      parseTime(row[8]), // ata
+      parseTime(row[9]), // toff
+      parseTime(row[10]), // tdwn
+      parseInt(row[11]) || null, // atd_offset
+      parseInt(row[12]) || null, // ata_offset
+      parseInt(row[13]) || null, // blk_offset
+      parseInt(row[14]) || null, // taxi_toff
+      parseInt(row[15]) || null, // taxi_ata
+      row[16] || "", // delay_codes
+      row[17] || "", // cnl
+    ];
+
+    // IMPORTANTE: Usamos await
+    await pool.query(
+      `
+      INSERT INTO movement_progress (
+        flight,
+        date,
+        \`from\`,
+        \`to\`,
+        ac_reg,
+        std,
+        atd,
+        sta,
+        ata,
+        toff,
+        tdwn,
+        atd_offset,
+        ata_offset,
+        blk_offset,
+        taxi_toff,
+        taxi_ata,
+        delay_codes,
+        cnl
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        std         = VALUES(std),
+        atd         = VALUES(atd),
+        sta         = VALUES(sta),
+        ata         = VALUES(ata),
+        toff        = VALUES(toff),
+        tdwn        = VALUES(tdwn),
+        atd_offset  = VALUES(atd_offset),
+        ata_offset  = VALUES(ata_offset),
+        blk_offset  = VALUES(blk_offset),
+        taxi_toff   = VALUES(taxi_toff),
+        taxi_ata    = VALUES(taxi_ata),
+        delay_codes = VALUES(delay_codes),
+        cnl         = VALUES(cnl)
+      `,
+      values
+    );
+
+    console.log(`Fila ${i} insertada`);
+  }
+
+  // Cuando acabes todo, si quieres cerrar el pool para que el script termine:
+  await pool.end();
 }
 
 async function getMovements() {
@@ -104,13 +195,12 @@ async function getMovements() {
     'li.AspNet-Menu-Leaf > a.AspNet-Menu-Link[href="/View/Admin/Statistics/MovementProgress.aspx"]',
     { visible: true }
   );
-  console.log("Movements page takes a while to load... Please wait.");
-
+  console.log("Entrando a página de movimientos...");
   await page.click(
     'li.AspNet-Menu-Leaf > a.AspNet-Menu-Link[href="/View/Admin/Statistics/MovementProgress.aspx"]'
   );
 
-  console.log("Movements page takes a while to load. Please wait.");
+  //console.log("Entrando a página de movimientos...");
 
   // Esperamos a que el botón "Export" esté presente y visible
   await page.waitForSelector(
@@ -140,9 +230,11 @@ async function getMovements() {
     const oldPath = path.join(downloadPath, csvFile);
     const newPath = path.join(downloadPath, "movements.csv");
 
-    // Renombrar el archivo descargado
+    // Renombrar el archivo descargado.
     fs.renameSync(oldPath, newPath);
-    console.log(`Archivo descargado y guardado como: ${newPath}`);
+    console.log(
+      `Archivo descargado y guardado como: ${path.relative(__dirname, newPath)}`
+    );
   } else {
     console.log(
       "No se encontró ningún archivo CSV en la carpeta de descargas."
@@ -151,6 +243,10 @@ async function getMovements() {
 
   // Cerrar el navegador
   await browser.close();
+
+  // Llamada a processCSVAndInsertIntoDatabase
+  const csvFilePath = path.resolve(__dirname, "csv", "movements.csv");
+  processCSVAndInsertIntoDatabase(csvFilePath);
 }
 
 getMovements();
