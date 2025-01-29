@@ -155,7 +155,7 @@ async function getMovements() {
 
   // Configuración de Puppeteer y MySQL (código anterior)
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: true,
     args: [
       "--disable-blink-features=AutomationControlled",
       "--start-maximized",
@@ -249,4 +249,15 @@ async function getMovements() {
   processCSVAndInsertIntoDatabase(csvFilePath);
 }
 
-getMovements();
+/*Incio de ejecución*/
+function startMovementsScrapingLoop() {
+  // Ejecutamos la primera vez de inmediato
+  getMovements();
+
+  // Luego repetimos cada 30 minutos (1800.000 ms)
+  setInterval(() => {
+    getMovements();
+  }, 30 * 60 * 1000);
+}
+
+startMovementsScrapingLoop();
