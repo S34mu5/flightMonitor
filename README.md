@@ -8,32 +8,64 @@ This project is designed to scrape, ingest, and manage flight data from public A
 
 ```
 .
-├── .gitignore
-├── estructura.txt
+├── README.md
 ├── db
 │   ├── diagram.png
 │   └── flights.sql
 ├── javaBackend
-│   ├── com.jaime_AvinorXmlIngestor_jar_1.0
-│   │   ├── .env
-│   │   └── pom.xml
-│   ├── src
-│   │   ├── main/java/com/jaime
-│   │   │   ├── Config.java
-│   │   │   ├── Ingestor.java
-│   │   │   └── IngestorMachines.java
-│   │   └── test/java/test
-│   │       ├── AvinorArrivalsIngestor.java
-│   │       └── AvinorDeparturesIngestor.java
-│   └── target
-│       ├── AvinorXmlIngestor-1.0.jar
-│       ├── original-AvinorXmlIngestor-1.0.jar
-│       └── [build files...]
+│   └── com.jaime_AvinorXmlIngestor_jar_1.0
+│       ├── Dockerfile
+│       ├── dependency-reduced-pom.xml
+│       ├── pom.xml
+│       ├── src
+│       │   ├── main
+│       │   │   └── java
+│       │   │       └── com
+│       │   │           └── jaime
+│       │   │               ├── Config.java
+│       │   │               ├── Ingestor.java
+│       │   │               └── IngestorMachines.java
+│       │   └── test
+│       │       └── java
+│       │           └── test
+│       │               ├── AvinorArrivalsIngestor.java
+│       │               └── AvinorDeparturesIngestor.java
+│       └── target
+│           ├── AvinorXmlIngestor-1.0.jar
+│           ├── classes
+│           │   └── com
+│           │       └── jaime
+│           │           ├── Config.class
+│           │           ├── Ingestor.class
+│           │           └── IngestorMachines.class
+│           ├── generated-sources
+│           │   └── annotations
+│           ├── generated-test-sources
+│           │   └── test-annotations
+│           ├── maven-archiver
+│           │   └── pom.properties
+│           ├── maven-status
+│           │   └── maven-compiler-plugin
+│           │       ├── compile
+│           │       │   └── default-compile
+│           │       │       ├── createdFiles.lst
+│           │       │       └── inputFiles.lst
+│           │       └── testCompile
+│           │           └── default-testCompile
+│           │               ├── createdFiles.lst
+│           │               └── inputFiles.lst
+│           ├── original-AvinorXmlIngestor-1.0.jar
+│           └── test-classes
+│               └── test
+│                   ├── AvinorArrivalsIngestor.class
+│                   └── AvinorDeparturesIngestor.class
 └── jsScraping
     └── tidyScraper
-        ├── .env
+        ├── csv
+        │   └── movements.csv
         ├── tidyArrivalsIngestor.js
-        └── tidyLdmIngestor.js
+        ├── tidyLdmIngestor.js
+        └── tidyMovementsIngestor.js
 ```
 
 ## Components
@@ -61,16 +93,19 @@ The database is structured to efficiently store and manage flight information:
 The Java backend uses Maven for dependency management and includes:
 
 #### Dependencies
+
 - mysql-connector-java
 - dotenv-java
 
 #### Key Components
 
 - **Config.java**
+
   - Manages environment variables and configuration
   - Handles database and API URL settings
 
 - **Ingestor.java**
+
   - Main ingestion controller
   - Orchestrates arrival and departure data processing
 
@@ -79,7 +114,6 @@ The Java backend uses Maven for dependency management and includes:
   - Handles XML data fetching and parsing
   - Updates database records
   - Maintains gate change history
-
 
 ### Web Scraping (JavaScript)
 
@@ -105,28 +139,24 @@ TIDY_PASSWORD=your_password
 #### Scripts
 
 - **tidyArrivalsIngestor.js**
+
   - Requires valid system credentials
   - Scrapes arrival data using authorized access
   - Updates tidy_flight_arrivals table
 
 - **tidyLdmIngestor.js**
+
   - Requires valid system credentials
   - Extracts Load Message (LDM) data
   - Updates ldm_data table
   - Flags processed flights in fullyscraped_combined_flights
 
-
-
-#### Scripts
-
-- **tidyArrivalsIngestor.js**
-  - Scrapes a web platform arrival data
-  - Updates tidy_flight_arrivals table
-
-- **tidyLdmIngestor.js**
-  - Extracts Load Message (LDM) data from a web platform
-  - Updates ldm_data table
-  - Flags processed flights in fullyscraped_combined_flights
+- **tidyMovementsIngestor.js**
+  - Tracks flight movements every 10 minutes
+  - Updates `movement_progress` with:
+    - Timestamp conversions (HHMM → SQL format)
+    - Taxi times and delay codes
+    - Automated CSV download/processing
 
 ## Setup
 
