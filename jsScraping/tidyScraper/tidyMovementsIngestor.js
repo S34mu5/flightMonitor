@@ -138,6 +138,7 @@ async function processCSVAndInsertIntoDatabase(filePath) {
       `,
       values
     );
+    
     let now = new Date().toISOString();
     console.log(`Fila ${i} insertada a las ${now}`);
   }
