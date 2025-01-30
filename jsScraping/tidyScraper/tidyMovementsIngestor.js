@@ -145,9 +145,6 @@ async function processCSVAndInsertIntoDatabase(filePath) {
   console.log(
     `Movimientos insertados en flights.movement_progress a las ${now}`
   );
-
-  // Cerrar el pool para que el script termine:
-  await pool.end();
 }
 
 async function getMovements() {
@@ -250,7 +247,7 @@ async function getMovements() {
 
   // Llamada a processCSVAndInsertIntoDatabase
   const csvFilePath = path.resolve(__dirname, "csv", "movements.csv");
-  processCSVAndInsertIntoDatabase(csvFilePath);
+  await processCSVAndInsertIntoDatabase(csvFilePath);
 }
 
 /*Incio de ejecución*/
@@ -258,10 +255,10 @@ function startMovementsScrapingLoop() {
   // Ejecutamos la primera vez de inmediato
   getMovements();
 
-  // Luego repetimos cada 30 minutos (1800.000 ms)
-  setInterval(() => {
+  // Luego repetimos cada 10 minutos (600.000 ms)
+  setInterval(async () => {
     getMovements();
-  }, 30 * 60 * 1000);
+  }, 10 * 60 * 1000);
 }
 
 startMovementsScrapingLoop();
