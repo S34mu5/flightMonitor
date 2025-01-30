@@ -98,7 +98,7 @@ async function processCSVAndInsertIntoDatabase(filePath) {
       row[17] || "", // cnl
     ];
 
-    // IMPORTANTE: Usamos await
+    // IMPORTANTE: Usamos await.
     await pool.query(
       `
       INSERT INTO movement_progress (
@@ -138,11 +138,15 @@ async function processCSVAndInsertIntoDatabase(filePath) {
       `,
       values
     );
-
-    console.log(`Fila ${i} insertada`);
+    let now = new Date().toISOString();
+    console.log(`Fila ${i} insertada a las ${now}`);
   }
+  now = new Date().toISOString();
+  console.log(
+    `Movimientos insertados en flights.movement_progress a las ${now}`
+  );
 
-  // Cuando acabes todo, si quieres cerrar el pool para que el script termine:
+  // Cerrar el pool para que el script termine:
   await pool.end();
 }
 
