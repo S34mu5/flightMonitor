@@ -15,7 +15,7 @@ const pool = mysql.createPool({
 ///Funcion principal. Entra a tidy
 async function getTidyArrivals() {
   const browser = await puppeteer.launch({
-    headless: false,
+    headless: true,
     args: [
       "--disable-blink-features=AutomationControlled",
       "--start-maximized",
