@@ -84,9 +84,11 @@ The database is structured to efficiently store and manage flight information:
 - **gate_history_arrivals / gate_history_departures**
   - Tracks historical gate assignments and changes
 - **tidy_flight_arrivals**
-  - Contains flight arrivals from the Tidy platform
+  - Contains flight arrivals from a web platform
 - **ldm_data**
   - Stores Load Message (LDM) information for flights
+  - - **movement_progress**
+  - Stores info from the CVS file provided by a web platform.
 
 ### Backend (Java)
 
